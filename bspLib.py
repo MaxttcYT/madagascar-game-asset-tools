@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 import struct
-import sys
-import json
 from typing import Any, Dict, Optional
 import random
 

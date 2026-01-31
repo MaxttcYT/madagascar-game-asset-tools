@@ -1,0 +1,6 @@
+other/ai.html
+other/ai.txt
+
+parsed_bsps/textures/*.[pP][nN][gG]
+parsed_bsps/textures/*.png
+parsed_bsps/textures/*.PNG

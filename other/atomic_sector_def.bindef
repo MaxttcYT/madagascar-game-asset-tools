@@ -1,0 +1,42 @@
+-- Written by Maxttc, 30/01/2025
+-- Open with vscode extension https://marketplace.visualstudio.com/items?itemName=Maxttc.bindef
+
+#type float32[3] RwV3d
+
+-- Header
+uint32 matListWindowBase;
+uint32 numTriangles;
+uint32 numVertices;
+
+-- Bounding Box
+RwV3d boxMaximum;
+RwV3d boxMinimum;
+
+uint32 collSectorPresent;
+uint32 unused;
+
+-- Vertex positions
+#for (numVertices)
+    float32 x;
+    float32 y;
+    float32 z;
+#endfor
+
+-- Vertex colors
+#for (numVertices)
+    color32 color;
+#endfor
+
+-- UV coordinates
+#for (numVertices)
+    float32 u;
+    float32 v;
+#endfor
+
+-- Triangles
+#for (numTriangles)
+    uint16 vertex1;
+    uint16 vertex2;
+    uint16 vertex3;
+    uint16 materialIndex;
+#endfor

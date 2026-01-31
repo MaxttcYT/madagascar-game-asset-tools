@@ -1,0 +1,212 @@
+-- Bindef for World_000B.bindef
+-- Very vibe coded and only partially correct, look into 
+-- open with https://marketplace.visualstudio.com/items?itemName=Maxttc.bindef
+
+-- World Header (0x000B)
+uint32 sectionIdentifier;
+int32 sectionSize;
+int32 renderWareVersion;
+
+-- WorldStruct Header (0x0001)
+uint32 worldStructIdentifier;
+int32 worldStructSize;
+int32 worldStructVersion;
+
+-- WorldStruct Data
+#if (worldStructSize == 0x40)
+    int32 rootIsWorldSector;
+    float32 inverseOriginX;
+    float32 inverseOriginY;
+    float32 inverseOriginZ;
+    uint32 numTriangles;
+    uint32 numVertices;
+    uint32 numPlaneSectors;
+    uint32 numAtomicSectors;
+    uint32 colSectorSize;
+    uint32 worldFlags;
+    float32 boxMaxX;
+    float32 boxMaxY;
+    float32 boxMaxZ;
+    float32 boxMinX;
+    float32 boxMinY;
+    float32 boxMinZ;
+#endif
+#if (worldStructSize == 0x34)
+    int32 rootIsWorldSector;
+    float32 inverseOriginX;
+    float32 inverseOriginY;
+    float32 inverseOriginZ;
+    float32 boxMaxX;
+    float32 boxMaxY;
+    float32 boxMaxZ;
+    uint32 numTriangles;
+    uint32 numVertices;
+    uint32 numPlaneSectors;
+    uint32 numAtomicSectors;
+    uint32 colSectorSize;
+    uint32 worldFlags;
+#endif
+
+-- MaterialList Header (0x0008)
+uint32 matListIdentifier;
+int32 matListSize;
+int32 matListVersion;
+
+-- MaterialListStruct Header
+uint32 matListStructIdentifier;
+int32 matListStructSize;
+int32 matListStructVersion;
+
+-- MaterialListStruct Data
+int32 materialCount;
+int32[materialCount] materialIndices;
+
+-- Materials
+#for (materialCount)
+    -- Material Header (0x0007)
+    uint32 materialIdentifier;
+    int32 materialSize;
+    int32 materialVersion;
+
+    -- MaterialStruct Header
+    uint32 matStructIdentifier;
+    int32 matStructSize;
+    int32 matStructVersion;
+
+    -- MaterialStruct Data
+    int32 unusedFlags;
+    color32 color;
+    int32 unusedInt2;
+    int32 isTextured;
+    float32 ambient;
+    float32 specular;
+    float32 diffuse;
+
+    #if (isTextured != 0)
+        -- Texture Header (0x0006)
+        uint32 textureIdentifier;
+        int32 textureSize;
+        int32 textureVersion;
+
+        -- TextureStruct Header
+        uint32 texStructIdentifier;
+        int32 texStructSize;
+        int32 texStructVersion;
+
+        -- TextureStruct Data
+        uint8 filterMode;
+        uint8 addressModes;
+        uint16 useMipLevels;
+
+        -- Diffuse Texture Name (0x0002)
+        uint32 diffuseNameIdentifier;
+        int32 diffuseNameSize;
+        int32 diffuseNameVersion;
+        string diffuseTextureName;
+
+        -- Alpha Texture Name (0x0002)
+        uint32 alphaNameIdentifier;
+        int32 alphaNameSize;
+        int32 alphaNameVersion;
+        string alphaTextureName;
+
+        -- Texture Extension Header
+        uint32 texExtIdentifier;
+        int32 texExtSize;
+        int32 texExtVersion;
+        uint8[texExtSize] texExtData;
+    #endif
+
+    -- Material Extension Header
+    uint32 matExtIdentifier;
+    int32 matExtSize;
+    int32 matExtVersion;
+    uint8[matExtSize] matExtData;
+#endfor
+
+-- FirstWorldChunk
+#if (numAtomicSectors == 1 && numPlaneSectors == 0)
+    -- AtomicSector Header (0x0009)
+    uint32 atomicIdentifier;
+    int32 atomicSize;
+    int32 atomicVersion;
+
+    -- AtomicSectorStruct Header
+    uint32 atomicStructIdentifier;
+    int32 atomicStructSize;
+    int32 atomicStructVersion;
+
+    -- AtomicSectorStruct Data
+    int32 matListWindowBase;
+    int32 numSectorTriangles;
+    int32 numSectorVertices;
+    float32 sectorBoxMaxX;
+    float32 sectorBoxMaxY;
+    float32 sectorBoxMaxZ;
+    float32 sectorBoxMinX;
+    float32 sectorBoxMinY;
+    float32 sectorBoxMinZ;
+    int32 collSectorPresent;
+    int32 unused;
+
+    -- Vertex Data
+    #for (numSectorVertices)
+        float32 vertexX;
+        float32 vertexY;
+        float32 vertexZ;
+    #endfor
+
+    -- Color Data
+    #for (numSectorVertices)
+        color32 vertexColor;
+    #endfor
+
+    -- UV Data
+    #for (numSectorVertices)
+        float32 uvX;
+        float32 uvY;
+    #endfor
+
+    -- Triangle Data
+    #for (numSectorTriangles)
+        uint16 materialIndex;
+        uint16 vertex1;
+        uint16 vertex2;
+        uint16 vertex3;
+    #endfor
+
+    -- AtomicSector Extension Header
+    uint32 atomicExtIdentifier;
+    int32 atomicExtSize;
+    int32 atomicExtVersion;
+    uint8[atomicExtSize] atomicExtData;
+#endif
+
+#if (numPlaneSectors > 0)
+    -- PlaneSector Header (0x000A)
+    uint32 planeIdentifier;
+    int32 planeSize;
+    int32 planeVersion;
+
+    -- PlaneStruct Header
+    uint32 planeStructIdentifier;
+    int32 planeStructSize;
+    int32 planeStructVersion;
+
+    -- PlaneStruct Data
+    int32 planeType;
+    float32 planeValue;
+    int32 leftIsAtomic;
+    int32 rightIsAtomic;
+    float32 leftValue;
+    float32 rightValue;
+
+    -- Left/Right children are recursive (AtomicSector or PlaneSector)
+    uint8[planeSize - planeStructSize - 12] planeChildrenData;
+#endif
+
+-- World Extension Header (0x0003)
+uint32 worldExtIdentifier;
+int32 worldExtSize;
+int32 worldExtVersion;
+uint8[worldExtSize] worldExtData;

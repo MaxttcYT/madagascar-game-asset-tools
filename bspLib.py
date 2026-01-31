@@ -4,7 +4,7 @@ import struct
 import sys
 import json
 from typing import Any, Dict, Optional
-
+import random
 
 class BinaryReader:
     """Helper class to read binary data with offset tracking."""
@@ -530,11 +530,11 @@ def collect_atomic_sectors(chunk: Optional[Dict[str, Any]]) -> list:
     return sectors
 
 
-def write_mtl(filepath: str, materials: list, texture_prefix: str = ""):
+def write_mtl(filepath: str, materials: list, texture_prefix: str = "", mat_suffix: str = ""):
     """Write materials to MTL file."""
     with open(filepath, "w") as f:
         for i, mat in enumerate(materials):
-            f.write(f"newmtl material_{i}\n")
+            f.write(f"newmtl material_{i}_{mat_suffix}\n")
 
             # Color (convert 0-255 to 0-1)
             color = mat.get("color", {})
@@ -564,32 +564,31 @@ def write_mtl(filepath: str, materials: list, texture_prefix: str = ""):
             f.write("\n")
 
 
-def write_obj(output_path: str, filename: str, world_data: Dict[str, Any], texture_prefix: str = ""):
-    """Write parsed world data to OBJ file."""
+def write_obj(output_path: str, filename: str, world_data: dict, texture_prefix: str = "", scale: float = 1.0):
+    """Write parsed world data to OBJ file, optionally scaling geometry."""
     import os
+    
+    mat_suffix = str(random.randint(1000, 9999))
 
-    # Collect all atomic sectors
-    sectors = collect_atomic_sectors(world_data.get("worldChunk"))
-
+    sectors = collect_atomic_sectors(world_data.get("worldChunk", []))
     if not sectors:
         print("No geometry found in BSP")
         return
 
-    # Get materials
     materials = world_data.get("materialList", {}).get("materials", [])
+    obj_path = os.path.join(output_path, f"{filename}.obj")
+    mtl_path = os.path.join(output_path, f"{filename}.mtl")
 
-    # Write MTL file
-    write_mtl(os.path.join(output_path, f"{filename}.mtl"), materials, texture_prefix)
+    write_mtl(mtl_path, materials, texture_prefix, mat_suffix)
 
-    # Write OBJ file
-    with open(os.path.join(output_path, f"{filename}.obj"), "w") as f:
+    vertex_offset = 0
+    uv_offset = 0
+
+    with open(obj_path, "w") as f:
         f.write("# RenderWare World BSP Export\n")
         f.write(f"# Vertices: {world_data.get('numVertices', 0)}\n")
         f.write(f"# Triangles: {world_data.get('numTriangles', 0)}\n")
-        f.write(f"mtllib {filename}\n\n")
-
-        vertex_offset = 0
-        uv_offset = 0
+        f.write(f"mtllib {filename}.mtl\n\n")
 
         for sector_idx, sector in enumerate(sectors):
             if sector.get("isNativeData"):
@@ -605,28 +604,25 @@ def write_obj(output_path: str, filename: str, world_data: Dict[str, Any], textu
             f.write(f"# Sector {sector_idx}\n")
             f.write(f"g sector_{sector_idx}\n")
 
-            # Write vertices
+            # Write vertices with scaling
             for v in vertices:
-                f.write(f"v {v['x']:.6f} {v['y']:.6f} {v['z']:.6f}\n")
+                f.write(f"v {v['x']*scale:.6f} {v['y']*scale:.6f} {v['z']*scale:.6f}\n")
 
-            # Write UVs
+            # Write UVs (V flipped)
             for uv in uvs:
-                f.write(f"vt {uv['u']:.6f} {1.0 - uv['v']:.6f}\n")  # Flip V
+                f.write(f"vt {uv['u']:.6f} {1.0 - uv['v']:.6f}\n")
 
-            # Group triangles by material
-            tris_by_mat: Dict[int, list] = {}
+            # Group triangles by material (add matListWindowBase to get actual material index)
+            mat_base = sector.get("matListWindowBase", 0)
+            tris_by_mat = {}
             for tri in triangles:
-                mat_idx = tri["materialIndex"]
-                if mat_idx not in tris_by_mat:
-                    tris_by_mat[mat_idx] = []
-                tris_by_mat[mat_idx].append(tri)
+                mat_idx = mat_base + tri["materialIndex"]
+                tris_by_mat.setdefault(mat_idx, []).append(tri)
 
             # Write faces grouped by material
             for mat_idx in sorted(tris_by_mat.keys()):
-                f.write(f"usemtl material_{mat_idx}\n")
-
+                f.write(f"usemtl material_{mat_idx}_{mat_suffix}\n")
                 for tri in tris_by_mat[mat_idx]:
-                    # OBJ indices are 1-based
                     v1 = tri["vertex1"] + vertex_offset + 1
                     v2 = tri["vertex2"] + vertex_offset + 1
                     v3 = tri["vertex3"] + vertex_offset + 1
@@ -643,5 +639,5 @@ def write_obj(output_path: str, filename: str, world_data: Dict[str, Any], textu
             uv_offset += len(uvs)
             f.write("\n")
 
-    print(f"Wrote {os.path.join(output_path, filename + '.obj')}")
-    print(f"Wrote {os.path.join(output_path, filename + '.mtl')}")
+    print(f"Wrote {obj_path}")
+    print(f"Wrote {mtl_path}")

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hex Compare</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .toolbar {
+            padding: 10px;
+            background: #2d2d2d;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            border-bottom: 1px solid #404040;
+        }
+        .toolbar button {
+            padding: 8px 16px;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .toolbar button:hover {
+            background: #1177bb;
+        }
+        .toolbar .info {
+            margin-left: auto;
+            color: #888;
+            font-size: 13px;
+        }
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .diff-list {
+            width: 200px;
+            background: #252526;
+            border-right: 1px solid #404040;
+            display: flex;
+            flex-direction: column;
+        }
+        .diff-list-header {
+            padding: 10px;
+            background: #2d2d2d;
+            font-weight: bold;
+            border-bottom: 1px solid #404040;
+        }
+        .diff-list-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .diff-item {
+            padding: 8px 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+        }
+        .diff-item:hover {
+            background: #2a2d2e;
+        }
+        .diff-item.selected {
+            background: #094771;
+        }
+        .diff-item .offset {
+            color: #569cd6;
+        }
+        .diff-item .values {
+            color: #ce9178;
+            font-size: 11px;
+            margin-top: 3px;
+        }
+        .hex-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        .hex-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .hex-panel:first-child {
+            border-right: 1px solid #404040;
+        }
+        .hex-header {
+            padding: 8px 10px;
+            background: #2d2d2d;
+            border-bottom: 1px solid #404040;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .hex-header .filename {
+            color: #dcdcaa;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .hex-header .size {
+            color: #6a9955;
+            font-size: 12px;
+        }
+        .hex-view {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+        }
+        .hex-content {
+            position: absolute;
+            left: 0;
+            right: 0;
+        }
+        .hex-row {
+            display: flex;
+            height: 20px;
+            line-height: 20px;
+            padding: 0 5px;
+        }
+        .hex-offset {
+            width: 80px;
+            color: #569cd6;
+            flex-shrink: 0;
+        }
+        .hex-bytes {
+            width: 400px;
+            flex-shrink: 0;
+        }
+        .hex-byte {
+            display: inline-block;
+            width: 24px;
+            text-align: center;
+        }
+        .hex-byte.diff {
+            background: #5c2d2d;
+            color: #f48771;
+            border-radius: 2px;
+        }
+        .hex-byte.missing {
+            background: #2d4a2d;
+            color: #6a9955;
+        }
+        .hex-ascii {
+            color: #9cdcfe;
+            padding-left: 15px;
+            border-left: 1px solid #404040;
+        }
+        .hex-ascii .char {
+            display: inline-block;
+            width: 10px;
+            text-align: center;
+        }
+        .hex-ascii .char.diff {
+            background: #5c2d2d;
+            color: #f48771;
+        }
+        .hex-ascii .char.non-printable {
+            color: #555;
+        }
+        .highlight-row {
+            background: #264f78 !important;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="document.getElementById('file1').click()">Load File 1</button>
+        <button onclick="document.getElementById('file2').click()">Load File 2</button>
+        <button onclick="compareFiles()">Compare</button>
+        <input type="file" id="file1" onchange="loadFile(1, this.files[0])">
+        <input type="file" id="file2" onchange="loadFile(2, this.files[0])">
+        <span class="info" id="status">Load two files to compare</span>
+    </div>
+    <div class="main-container">
+        <div class="diff-list">
+            <div class="diff-list-header">Differences (<span id="diff-count">0</span>)</div>
+            <div class="diff-list-content" id="diff-list"></div>
+        </div>
+        <div class="hex-container">
+            <div class="hex-panel">
+                <div class="hex-header">
+                    <span class="filename" id="filename1">No file loaded</span>
+                    <span class="size" id="size1"></span>
+                </div>
+                <div class="hex-view" id="hex1">
+                    <div class="empty-state">Load File 1</div>
+                </div>
+            </div>
+            <div class="hex-panel">
+                <div class="hex-header">
+                    <span class="filename" id="filename2">No file loaded</span>
+                    <span class="size" id="size2"></span>
+                </div>
+                <div class="hex-view" id="hex2">
+                    <div class="empty-state">Load File 2</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let file1Data = null;
+        let file2Data = null;
+        let differences = [];
+        let syncingScroll = false;
+        let comparisonDone = false;
+
+        const ROW_HEIGHT = 20;
+        const BUFFER_ROWS = 20;
+
+        function loadFile(num, file) {
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                if (num === 1) {
+                    file1Data = data;
+                    document.getElementById('filename1').textContent = file.name;
+                    document.getElementById('size1').textContent = formatSize(data.length);
+                } else {
+                    file2Data = data;
+                    document.getElementById('filename2').textContent = file.name;
+                    document.getElementById('size2').textContent = formatSize(data.length);
+                }
+                comparisonDone = false;
+                initHexView('hex1', file1Data, null);
+                initHexView('hex2', file2Data, null);
+                updateStatus();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function updateStatus() {
+            const status = document.getElementById('status');
+            if (file1Data && file2Data) {
+                status.textContent = 'Ready to compare';
+            } else if (file1Data || file2Data) {
+                status.textContent = 'Load second file to compare';
+            } else {
+                status.textContent = 'Load two files to compare';
+            }
+        }
+
+        function compareFiles() {
+            if (!file1Data || !file2Data) {
+                alert('Please load both files first');
+                return;
+            }
+
+            document.getElementById('status').textContent = 'Comparing...';
+
+            // Use setTimeout to not block UI
+            setTimeout(() => {
+                differences = [];
+                const maxLen = Math.max(file1Data.length, file2Data.length);
+                const MAX_DIFF_REGIONS = 10000;
+
+                let currentDiff = null;
+                let totalDiffBytes = 0;
+
+                for (let i = 0; i < maxLen; i++) {
+                    const byte1 = i < file1Data.length ? file1Data[i] : null;
+                    const byte2 = i < file2Data.length ? file2Data[i] : null;
+
+                    if (byte1 !== byte2) {
+                        totalDiffBytes++;
+                        if (currentDiff === null) {
+                            currentDiff = { start: i, end: i, count: 1 };
+                        } else {
+                            currentDiff.end = i;
+                            currentDiff.count++;
+                        }
+
+                        // Close region after 16 bytes or if we have enough regions
+                        if (currentDiff.count >= 16) {
+                            if (differences.length < MAX_DIFF_REGIONS) {
+                                differences.push(currentDiff);
+                            }
+                            currentDiff = null;
+                        }
+                    } else if (currentDiff !== null) {
+                        if (differences.length < MAX_DIFF_REGIONS) {
+                            differences.push(currentDiff);
+                        }
+                        currentDiff = null;
+                    }
+                }
+
+                if (currentDiff !== null && differences.length < MAX_DIFF_REGIONS) {
+                    differences.push(currentDiff);
+                }
+
+                comparisonDone = true;
+                initHexView('hex1', file1Data, file2Data);
+                initHexView('hex2', file2Data, file1Data);
+                renderDiffList();
+
+                let statusMsg = `Found ${totalDiffBytes} different bytes in ${differences.length} regions`;
+                if (differences.length >= MAX_DIFF_REGIONS) {
+                    statusMsg += ' (list truncated)';
+                }
+                document.getElementById('status').textContent = statusMsg;
+            }, 10);
+        }
+
+        function initHexView(containerId, data, otherData) {
+            const container = document.getElementById(containerId);
+            if (!data) {
+                container.innerHTML = '<div class="empty-state">No file loaded</div>';
+                return;
+            }
+
+            const otherLength = otherData ? otherData.length : 0;
+            const maxLen = Math.max(data.length, otherLength);
+            const totalRows = Math.ceil(maxLen / 16);
+            const totalHeight = totalRows * ROW_HEIGHT;
+
+            container.innerHTML = `<div class="hex-content" style="height: ${totalHeight}px;"></div>`;
+            const content = container.querySelector('.hex-content');
+
+            container.onscroll = function() {
+                renderVisibleRows(container, content, data, otherData, maxLen);
+                if (!syncingScroll) {
+                    syncingScroll = true;
+                    const otherId = containerId === 'hex1' ? 'hex2' : 'hex1';
+                    document.getElementById(otherId).scrollTop = container.scrollTop;
+                    setTimeout(() => syncingScroll = false, 10);
+                }
+            };
+
+            renderVisibleRows(container, content, data, otherData, maxLen);
+        }
+
+        function renderVisibleRows(container, content, data, otherData, maxLen) {
+            const scrollTop = container.scrollTop;
+            const viewHeight = container.clientHeight;
+
+            const startRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_ROWS);
+            const endRow = Math.min(
+                Math.ceil(maxLen / 16),
+                Math.ceil((scrollTop + viewHeight) / ROW_HEIGHT) + BUFFER_ROWS
+            );
+
+            let html = '';
+            for (let row = startRow; row < endRow; row++) {
+                const offset = row * 16;
+                const top = row * ROW_HEIGHT;
+                html += `<div class="hex-row" style="position:absolute;top:${top}px;left:0;right:0;" data-offset="${offset}">`;
+                html += `<span class="hex-offset">${offset.toString(16).padStart(8, '0').toUpperCase()}</span>`;
+
+                html += '<span class="hex-bytes">';
+                for (let i = 0; i < 16; i++) {
+                    const byteOffset = offset + i;
+                    if (byteOffset < data.length) {
+                        const byte = data[byteOffset];
+                        const otherByte = otherData && byteOffset < otherData.length ? otherData[byteOffset] : null;
+                        const isDiff = otherData !== null && (otherByte === null || byte !== otherByte);
+                        html += `<span class="hex-byte${isDiff ? ' diff' : ''}">${byte.toString(16).padStart(2, '0').toUpperCase()}</span>`;
+                    } else if (byteOffset < maxLen) {
+                        html += `<span class="hex-byte missing">--</span>`;
+                    } else {
+                        html += '<span class="hex-byte">  </span>';
+                    }
+                    if (i === 7) html += ' ';
+                }
+                html += '</span>';
+
+                html += '<span class="hex-ascii">';
+                for (let i = 0; i < 16; i++) {
+                    const byteOffset = offset + i;
+                    if (byteOffset < data.length) {
+                        const byte = data[byteOffset];
+                        const otherByte = otherData && byteOffset < otherData.length ? otherData[byteOffset] : null;
+                        const isDiff = otherData !== null && (otherByte === null || byte !== otherByte);
+                        const char = (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.';
+                        const isNonPrintable = byte < 32 || byte > 126;
+                        html += `<span class="char${isDiff ? ' diff' : ''}${isNonPrintable ? ' non-printable' : ''}">${char}</span>`;
+                    } else if (byteOffset < maxLen) {
+                        html += '<span class="char non-printable">.</span>';
+                    }
+                }
+                html += '</span>';
+
+                html += '</div>';
+            }
+
+            content.innerHTML = html;
+        }
+
+        function renderDiffList() {
+            const container = document.getElementById('diff-list');
+            document.getElementById('diff-count').textContent = differences.length;
+
+            let html = '';
+            differences.forEach((diff, index) => {
+                const byte1 = diff.start < file1Data.length ? file1Data[diff.start] : null;
+                const byte2 = diff.start < file2Data.length ? file2Data[diff.start] : null;
+                const byte1Str = byte1 !== null ? byte1.toString(16).padStart(2, '0').toUpperCase() : '--';
+                const byte2Str = byte2 !== null ? byte2.toString(16).padStart(2, '0').toUpperCase() : '--';
+
+                html += `<div class="diff-item" onclick="scrollToDiff(${index}, ${diff.start})">`;
+                html += `<div class="offset">0x${diff.start.toString(16).toUpperCase()}</div>`;
+                html += `<div class="values">${byte1Str} → ${byte2Str}`;
+                if (diff.count > 1) {
+                    html += ` (+${diff.count - 1} more)`;
+                }
+                html += '</div></div>';
+            });
+
+            container.innerHTML = html;
+        }
+
+        function scrollToDiff(index, offset) {
+            document.querySelectorAll('.diff-item').forEach((el, i) => {
+                el.classList.toggle('selected', i === index);
+            });
+
+            const rowIndex = Math.floor(offset / 16);
+            const scrollTop = rowIndex * ROW_HEIGHT - 100;
+
+            syncingScroll = true;
+            document.getElementById('hex1').scrollTop = Math.max(0, scrollTop);
+            document.getElementById('hex2').scrollTop = Math.max(0, scrollTop);
+            setTimeout(() => syncingScroll = false, 50);
+        }
+    </script>
+</body>
+</html>

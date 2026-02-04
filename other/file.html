@@ -40,6 +40,10 @@
     .match {
         background-color: #d4f8d4;
     }
+    span.error {
+        color: red;
+        display: none;
+    }
 </style>
 </head>
 <body>
@@ -48,11 +52,11 @@
 
 <h2>Forward (Chunk → All Vendors)</h2>
 <input id="chunk" placeholder="Chunk ID (hex, e.g. 78)">
-<span id="chunk-error" style="color:red; display:none;">Invalid hex!</span>
+<span id="chunk-error" class="error">Invalid hex!</span>
 
 <h2>Reverse (Combined → Per Vendor)</h2>
 <input id="combined" placeholder="Combined ID (hex, e.g. 12345678)">
-<span id="combined-error" style="color:red; display:none;">Invalid hex!</span>
+<span id="combined-error" class="error">Invalid hex!</span>
 
 <table id="results" style="display:none;">
     <thead>
@@ -124,7 +128,7 @@ function generateReverse(combinedValue) {
                 <td><code>0x${v.id.toString(16).padStart(6,"0")}</code></td>
                 <td><code>${isMatch ? '0x'+chunkPart.toString(16).padStart(2,'0') : '—'}</code></td>
                 <td><code>${isMatch ? 'MATCH' : ''}</code></td>
-                <td><code>${isMatch ? combinedValue : ''}</code></td>
+                <td><code>${combinedValue}</code></td>
             </tr>
         `;
     });
@@ -133,12 +137,12 @@ function generateReverse(combinedValue) {
 
 function handleChunkInput() {
     const val = chunkInput.value.trim();
-    const num = parseInt(val, 16);
-    if (val === "") {
+    if (!val) {
         hideTable();
         document.getElementById("chunk-error").style.display = "none";
         return;
     }
+    const num = parseInt(val, 16);
     if (isNaN(num)) {
         document.getElementById("chunk-error").style.display = "inline";
         return;
@@ -149,12 +153,12 @@ function handleChunkInput() {
 
 function handleCombinedInput() {
     const val = combinedInput.value.trim();
-    const num = parseInt(val, 16);
-    if (val === "") {
+    if (!val) {
         hideTable();
         document.getElementById("combined-error").style.display = "none";
         return;
     }
+    const num = parseInt(val, 16);
     if (isNaN(num)) {
         document.getElementById("combined-error").style.display = "inline";
         return;

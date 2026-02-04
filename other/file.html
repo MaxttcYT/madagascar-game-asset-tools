@@ -1,37 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>RenderWare Chunk ID Tool</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-        input {
-            width: 260px;
-            padding: 5px;
-            margin-bottom: 10px;
-        }
-        button {
-            padding: 6px 12px;
-            margin-left: 10px;
-        }
-        table {
-            margin-top: 20px;
-            border-collapse: collapse;
-        }
-        th, td {
-            border: 1px solid #ccc;
-            padding: 6px 10px;
-        }
-        th {
-            background: #f0f0f0;
-        }
-        code {
-            font-family: monospace;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>RenderWare Chunk ID Tool</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: auto;
+    }
+    h1, h2 {
+        margin-bottom: 10px;
+    }
+    input {
+        width: 260px;
+        padding: 5px;
+        margin-bottom: 10px;
+    }
+    table {
+        margin-top: 20px;
+        border-collapse: collapse;
+        width: 100%;
+        overflow-x: auto;
+        display: block;
+    }
+    th, td {
+        border: 1px solid #ccc;
+        padding: 6px 10px;
+        text-align: center;
+        white-space: nowrap;
+    }
+    th {
+        background: #f0f0f0;
+    }
+    code {
+        font-family: monospace;
+    }
+    .match {
+        background-color: #d4f8d4;
+    }
+</style>
 </head>
 <body>
 
@@ -39,19 +48,20 @@
 
 <h2>Forward (Chunk → All Vendors)</h2>
 <input id="chunk" placeholder="Chunk ID (hex, e.g. 78)">
-<button onclick="generate()">Generate</button>
+<span id="chunk-error" style="color:red; display:none;">Invalid hex!</span>
 
 <h2>Reverse (Combined → Per Vendor)</h2>
 <input id="combined" placeholder="Combined ID (hex, e.g. 12345678)">
-<button onclick="reverse()">Reverse</button>
+<span id="combined-error" style="color:red; display:none;">Invalid hex!</span>
 
-<table id="results" style="display:none">
+<table id="results" style="display:none;">
     <thead>
         <tr>
             <th>Vendor</th>
             <th>Vendor ID</th>
             <th>Chunk ID</th>
             <th>Combined ID</th>
+            <th>Combined ID (Decimal)</th>
         </tr>
     </thead>
     <tbody></tbody>
@@ -71,59 +81,90 @@ const vendors = [
     { name: "rwVENDORID_CRITERIONRWP",   id: 0x000009 }
 ];
 
+const chunkInput = document.getElementById("chunk");
+const combinedInput = document.getElementById("combined");
+const resultsTable = document.getElementById("results");
+const tbody = resultsTable.querySelector("tbody");
+
 function showTable() {
-    document.getElementById("results").style.display = "table";
+    resultsTable.style.display = "table";
 }
 
-function generate() {
-    const chunkInput = parseInt(document.getElementById("chunk").value, 16);
-    if (isNaN(chunkInput)) return;
+function hideTable() {
+    resultsTable.style.display = "none";
+}
 
-    const chunk = chunkInput & 0xFF;
-    const tbody = document.querySelector("#results tbody");
+function generateForward(chunkValue) {
     tbody.innerHTML = "";
-
     vendors.forEach(v => {
-        const combined = ((v.id & 0xFFFFFF) << 8) | chunk;
-
+        const combined = ((v.id & 0xFFFFFF) << 8) | chunkValue;
         tbody.innerHTML += `
             <tr>
                 <td>${v.name}</td>
-                <td><code>0x${v.id.toString(16).padStart(6, "0")}</code></td>
-                <td><code>0x${chunk.toString(16).padStart(2, "0")}</code></td>
-                <td><code>0x${combined.toString(16).padStart(8, "0")}</code></td>
+                <td><code>0x${v.id.toString(16).padStart(6,"0")}</code></td>
+                <td><code>0x${chunkValue.toString(16).padStart(2,"0")}</code></td>
+                <td><code>0x${combined.toString(16).padStart(8,"0")}</code></td>
+                <td><code>${combined}</code></td>
             </tr>
         `;
     });
-
     showTable();
 }
 
-function reverse() {
-    const combinedInput = parseInt(document.getElementById("combined").value, 16);
-    if (isNaN(combinedInput)) return;
-
-    const vendorPart = (combinedInput >> 8) & 0xFFFFFF;
-    const chunkPart  = combinedInput & 0xFF;
-
-    const tbody = document.querySelector("#results tbody");
+function generateReverse(combinedValue) {
     tbody.innerHTML = "";
+    const vendorPart = (combinedValue >> 8) & 0xFFFFFF;
+    const chunkPart = combinedValue & 0xFF;
 
     vendors.forEach(v => {
-        const matchesVendor = v.id === vendorPart;
-
+        const isMatch = v.id === vendorPart;
         tbody.innerHTML += `
-            <tr>
+            <tr class="${isMatch ? 'match' : ''}">
                 <td>${v.name}</td>
-                <td><code>0x${v.id.toString(16).padStart(6, "0")}</code></td>
-                <td><code>${matchesVendor ? "0x" + chunkPart.toString(16).padStart(2, "0") : "—"}</code></td>
-                <td><code>${matchesVendor ? "MATCH" : ""}</code></td>
+                <td><code>0x${v.id.toString(16).padStart(6,"0")}</code></td>
+                <td><code>${isMatch ? '0x'+chunkPart.toString(16).padStart(2,'0') : '—'}</code></td>
+                <td><code>${isMatch ? 'MATCH' : ''}</code></td>
+                <td><code>${isMatch ? combinedValue : ''}</code></td>
             </tr>
         `;
     });
-
     showTable();
 }
+
+function handleChunkInput() {
+    const val = chunkInput.value.trim();
+    const num = parseInt(val, 16);
+    if (val === "") {
+        hideTable();
+        document.getElementById("chunk-error").style.display = "none";
+        return;
+    }
+    if (isNaN(num)) {
+        document.getElementById("chunk-error").style.display = "inline";
+        return;
+    }
+    document.getElementById("chunk-error").style.display = "none";
+    generateForward(num & 0xFF);
+}
+
+function handleCombinedInput() {
+    const val = combinedInput.value.trim();
+    const num = parseInt(val, 16);
+    if (val === "") {
+        hideTable();
+        document.getElementById("combined-error").style.display = "none";
+        return;
+    }
+    if (isNaN(num)) {
+        document.getElementById("combined-error").style.display = "inline";
+        return;
+    }
+    document.getElementById("combined-error").style.display = "none";
+    generateReverse(num);
+}
+
+chunkInput.addEventListener("input", handleChunkInput);
+combinedInput.addEventListener("input", handleCombinedInput);
 </script>
 
 </body>

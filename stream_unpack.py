@@ -3,8 +3,11 @@ import os
 import sys
 import json
 import base64
+import uuid
 
-RW_CONTAINER = 1814
+RW_CONTAINER = 1814     # strfunc_LoadEmbeddedAsset
+RW_OBJECT_THIGY = 1796  # strfunc_CreateEntity
+RW_OBJECT_THIGY = 1820  # strFunc_PlacementNew
 
 
 def read_u32(f):
@@ -14,23 +17,35 @@ def read_u32(f):
 def read_string_raw(f, size):
     data = f.read(size)
     if b"\x00" in data:
-        data = data[:data.index(b"\x00")]
+        data = data[: data.index(b"\x00")]
     return data.decode("ascii", errors="ignore")
 
 
 def remove_ext(name, ext):
     if name.lower().endswith(ext.lower()):
-        return name[:-len(ext)]
+        return name[: -len(ext)]
     return name
+
+
+def find_first_ascii_string(data, min_length=1):
+    ascii_chars = []
+    for b in data:
+        if 32 <= b <= 126:  # Printable ASCII range
+            ascii_chars.append(chr(b))
+        else:
+            if len(ascii_chars) >= min_length:
+                return "".join(ascii_chars)
+            ascii_chars = []
+    # Check at the end in case string is at the end
+    if len(ascii_chars) >= min_length:
+        return "".join(ascii_chars)
+    return None
 
 
 def main(in_file, out_dir):
     os.makedirs(out_dir, exist_ok=True)
 
-    manifest = {
-        "source_file": os.path.basename(in_file),
-        "entries": []
-    }
+    manifest = {"source_file": os.path.basename(in_file), "entries": []}
 
     with open(in_file, "rb") as f:
         f.seek(0, os.SEEK_END)
@@ -42,6 +57,8 @@ def main(in_file, out_dir):
         while True:
             Index += 1
 
+            sectionStart = f.tell()
+
             try:
                 rwType = read_u32(f)
             except struct.error:
@@ -52,46 +69,27 @@ def main(in_file, out_dir):
             sectSize = read_u32(f)
             rwVersion = read_u32(f)
             sectOffset = f.tell()
-            print(rwVersion)
 
-            print(f"INDEX: {Index} RWTYPE: {rwType}")
+            print("----------------------")
+            print(f"INDEX: {Index} RWTYPE: {rwType} HEADER OFF: {hex(sectionStart)} DATA OFF: {hex(sectOffset)}")
 
-            if rwType != RW_CONTAINER:
-                fName += str(rwType)
-                fName += ".UNK"
-
-                f.seek(sectOffset)
-                data = f.read(sectSize)
-
-                with open(os.path.join(out_dir, fName), "wb") as out:
-                    out.write(data)
-
-                manifest["entries"].append({
-                    "index": Index,
-                    "filename": fName,
-                    "rwType": rwType,
-                    "sectSize": sectSize,
-                    "rwVersion": rwVersion,
-                    "is_container": False
-                })
-
-            else:
+            if rwType == RW_CONTAINER:
                 memory_file = f.read(sectSize)
                 mem = memory_file
                 mem_pos = 0
 
                 def mem_u32():
                     nonlocal mem_pos
-                    val = struct.unpack("<I", mem[mem_pos:mem_pos + 4])[0]
+                    val = struct.unpack("<I", mem[mem_pos : mem_pos + 4])[0]
                     mem_pos += 4
                     return val
 
                 def mem_string(size):
                     nonlocal mem_pos
-                    data = mem[mem_pos:mem_pos + size]
+                    data = mem[mem_pos : mem_pos + size]
                     mem_pos += size
                     if b"\x00" in data:
-                        data = data[:data.index(b"\x00")]
+                        data = data[: data.index(b"\x00")]
                     return data.decode("ascii", errors="ignore")
 
                 headerSize = mem_u32()
@@ -99,22 +97,24 @@ def main(in_file, out_dir):
 
                 nameSize = mem_u32()
 
-                name_raw = mem[mem_pos:mem_pos + nameSize]
+                name_raw = mem[mem_pos : mem_pos + nameSize]
                 mem_pos += nameSize
 
                 if b"\x00" in name_raw:
-                    rwName = name_raw[:name_raw.index(b"\x00")].decode("ascii", errors="ignore")
+                    rwName = name_raw[: name_raw.index(b"\x00")].decode(
+                        "ascii", errors="ignore"
+                    )
                 else:
                     rwName = name_raw.decode("ascii", errors="ignore")
 
                 fName += rwName
 
                 # 16 unknown bytes
-                unknown_16_bytes = mem[mem_pos:mem_pos + 16]
+                guid = mem[mem_pos : mem_pos + 16]
                 mem_pos += 16
 
                 rwID_Size = mem_u32()
-                rwID_raw = mem[mem_pos:mem_pos + rwID_Size]
+                rwID_raw = mem[mem_pos : mem_pos + rwID_Size]
                 rwID = mem_string(rwID_Size)
 
                 # Capture any remaining header bytes after rwID
@@ -168,36 +168,118 @@ def main(in_file, out_dir):
                 mem_pos = headerStart
                 mem_pos += headerSize
 
-                fSize = struct.unpack("<I", mem[mem_pos:mem_pos + 4])[0]
+                fSize = struct.unpack("<I", mem[mem_pos : mem_pos + 4])[0]
                 mem_pos += 4
                 fOffset = mem_pos
 
+                fName = fName.replace("/", "_").replace("\\", "_").replace("?", "_")
+
                 with open(os.path.join(out_dir, fName), "wb") as out:
-                    out.write(mem[fOffset:fOffset + fSize])
+                    out.write(mem[fOffset : fOffset + fSize])
 
                 # Capture any trailing bytes after file data
-                trailing_data = mem[fOffset + fSize:]
+                trailing_data = mem[fOffset + fSize :]
 
-                manifest["entries"].append({
-                    "index": Index,
-                    "filename": fName,
-                    "rwType": rwType,
-                    "sectSize": sectSize,
-                    "rwVersion": rwVersion,
-                    "is_container": True,
-                    "container": {
-                        "headerSize": headerSize,
-                        "nameSize": nameSize,
-                        "name_raw": base64.b64encode(name_raw).decode("ascii"),
-                        "unknown_16_bytes": base64.b64encode(unknown_16_bytes).decode("ascii"), # Probably GUID
-                        "rwID_Size": rwID_Size,
-                        "rwID_raw": base64.b64encode(rwID_raw).decode("ascii"),
-                        "rwID": rwID,
-                        "remaining_header": base64.b64encode(remaining_header).decode("ascii"),
-                        "fSize": fSize,
-                        "trailing_data": base64.b64encode(trailing_data).decode("ascii")
+                print(fName)
+
+                guid_str = str(uuid.UUID(bytes=guid))
+                manifest["entries"].append(
+                    {
+                        "index": Index,
+                        "filename": fName,
+                        "rwType": rwType,
+                        "sectSize": sectSize,
+                        "rwVersion": rwVersion,
+                        "is_container": True,
+                        "container": {
+                            "headerSize": headerSize,
+                            "nameSize": nameSize,
+                            "name_raw": base64.b64encode(name_raw).decode("ascii"),
+                            "guid": guid_str,
+                            "rwID_Size": rwID_Size,
+                            "rwID_raw": base64.b64encode(rwID_raw).decode("ascii"),
+                            "rwID": rwID,
+                            "remaining_header": base64.b64encode(
+                                remaining_header
+                            ).decode("ascii"),
+                            "fSize": fSize,
+                            "trailing_data": base64.b64encode(trailing_data).decode(
+                                "ascii"
+                            ),
+                        },
                     }
-                })
+                )
+
+            elif rwType == 1796:
+                f.seek(sectOffset)
+                data = f.read(sectSize)
+                behaviour = find_first_ascii_string(data).strip()
+
+                fName += behaviour
+                fName += ".rwCreateEntity"
+                
+                print(fName)
+                with open(os.path.join(out_dir, fName), "wb") as out:
+                    out.write(data)
+
+                manifest["entries"].append(
+                    {
+                        "index": Index,
+                        "filename": fName,
+                        "behaviour": behaviour,
+                        "rwType": rwType,
+                        "sectSize": sectSize,
+                        "rwVersion": rwVersion,
+                        "is_container": False,
+                    }
+                )    
+            elif rwType == 1820:
+                f.seek(sectOffset)
+                data = f.read(sectSize)
+
+                fName += "placement.rwPlacementNew" # will be indx_placement.rwPlacementNew
+                print(fName)
+
+                with open(os.path.join(out_dir, fName), "wb") as out:
+                    out.write(data)
+
+                manifest["entries"].append(
+                    {
+                        "index": Index,
+                        "filename": fName,
+                        "rwType": rwType,
+                        "sectSize": sectSize,
+                        "rwVersion": rwVersion,
+                        "is_container": False,
+                    }
+                )
+                
+                
+            
+            else:
+                fName += str(rwType)
+                fName += ".UNK"
+                print(fName)
+
+                f.seek(sectOffset)
+                data = f.read(sectSize)
+
+                with open(os.path.join(out_dir, fName), "wb") as out:
+                    out.write(data)
+
+                behaviour = find_first_ascii_string(data).strip()
+
+                manifest["entries"].append(
+                    {
+                        "index": Index,
+                        "filename": fName,
+                        "behaviour": behaviour,
+                        "rwType": rwType,
+                        "sectSize": sectSize,
+                        "rwVersion": rwVersion,
+                        "is_container": False,
+                    }
+                )
 
             f.seek(sectOffset + sectSize)
 

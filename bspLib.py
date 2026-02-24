@@ -405,7 +405,7 @@ def parse(
     data: bytes, is_collision: bool = False
 ) -> Dict[str, Any]:
     """
-    Parse binary data according to the World (0x000B) BinDef structure.
+    Parse binary World (0x000B) data.
 
     Args:
         data: Binary data to parse

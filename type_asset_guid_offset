@@ -1,0 +1,3 @@
+CProtoActor -> 0x68     REFRENCE TO DFF
+CTFBModel -> 0x50        REFRENCE TO DFF   0x68 REF ANIM   0x80 REF ANIM 
+CTFBSound -> 0x50        REFRENCE TO LPA

@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import base64
+import uuid
 
 RW_CONTAINER = 1814
 
@@ -52,17 +53,17 @@ def main(in_dir, out_file):
                 container = entry["container"]
 
                 name_raw = base64.b64decode(container["name_raw"])
-                unknown_16_bytes = base64.b64decode(container["unknown_16_bytes"])
+                guid = uuid.UUID(container["guid"]).bytes
                 rwID_raw = base64.b64decode(container["rwID_raw"])
                 remaining_header = base64.b64decode(container.get("remaining_header", ""))
                 trailing_data = base64.b64decode(container.get("trailing_data", ""))
 
                 # Build container header
-                # Header contains: nameSize(4) + name_raw + unknown_16_bytes(16) + rwID_Size(4) + rwID_raw + remaining
+                # Header contains: nameSize(4) + name_raw + guid(16) + rwID_Size(4) + rwID_raw + remaining
                 header_content = b""
                 header_content += struct.pack("<I", container["nameSize"])
                 header_content += name_raw
-                header_content += unknown_16_bytes
+                header_content += guid
                 header_content += struct.pack("<I", container["rwID_Size"])
                 header_content += rwID_raw
                 header_content += remaining_header
